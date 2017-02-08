@@ -269,6 +269,18 @@ cmd_quit(int nargs, char **args)
 	return 0;
 }
 
+////// Hello ///////
+static
+int
+cmd_hello(int nargs, char **args)
+{
+	(void)nargs;
+	(void)args;
+	
+	kprintf("Hello, world!\n");
+	return 0;
+}
+
 /*
  * Command for mounting a filesystem.
  */
@@ -449,6 +461,7 @@ showmenu(const char *name, const char *x[])
 }
 
 static const char *opsmenu[] = {
+	"[hello]   Prints \"Hello, World!\"  ",
 	"[s]       Shell                     ",
 	"[p]       Other program             ",
 	"[mount]   Mount a filesystem        ",
@@ -560,6 +573,7 @@ static struct {
 	{ "?t",		cmd_testmenu },
 
 	/* operations */
+	{ "hello",      cmd_hello },
 	{ "s",		cmd_shell },
 	{ "p",		cmd_prog },
 	{ "mount",	cmd_mount },

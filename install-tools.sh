@@ -1,31 +1,31 @@
 #!/bin/bash
 
+
 # set up the PATH
-mkdir -p $HOME/os161
-mkdir -p $HOME/os161/toolbuild
-mkdir -p $HOME/os161/tools
-mkdir -p $HOME/os161/tools/bin
+#mkdir -p $HOME/os161
+#mkdir -p $HOME/os161/toolbuild
+#mkdir -p $HOME/os161/tools
+#mkdir -p $HOME/os161/tools/bin
 export PATH=$HOME/os161/tools/bin:$PATH
 
 cd $HOME/os161/toolbuild
 
+:<<QUIET
 # Download, build and install binutils 
-wget http://www.eecs.harvard.edu/~dholland/os161/download/binutils-2.24+os161-2.1.tar.gz
+wget -N http://www.eecs.harvard.edu/~dholland/os161/download/binutils-2.24+os161-2.1.tar.gz
 tar -zxf binutils-2.24+os161-2.1.tar.gz
 
 cd binutils-2.24+os161-2.1
 find . -name '*.info' | xargs touch
 touch intl/plural.c
-cd ..
 
-cd binutils-2.24+os161-2.1
 ./configure --nfp --disable-werror --target=mips-harvard-os161 --prefix=$HOME/os161/tools
 make
 make install
 cd ..
 
 # Download, build, and install GCC-4.8
-wget http://www.eecs.harvard.edu/~dholland/os161/download/gcc-4.8.3+os161-2.1.tar.gz
+wget -N http://www.eecs.harvard.edu/~dholland/os161/download/gcc-4.8.3+os161-2.1.tar.gz
 tar -zxf gcc-4.8.3+os161-2.1.tar.gz
 cd gcc-4.8.3+os161-2.1
 
@@ -50,24 +50,25 @@ make
 make install
 cd ..
 
+QUIET
 # Download, build, and install gdb 7.8
-wget http://www.eecs.harvard.edu/~dholland/os161/download/gdb-7.8+os161-2.1.tar.gz
+wget -N http://www.eecs.harvard.edu/~dholland/os161/download/gdb-7.8+os161-2.1.tar.gz
 tar -zxf gdb-7.8+os161-2.1.tar.gz
 
 cd gdb-7.8+os161-2.1
 find . -name '*.info' | xargs touch
 touch intl/plural.c
-cd ..
 
-cd gdb-7.8+os161-2.1
-CC="gcc -std=gnu89" ./configure --target=mips-harvard-os161 --prefix=$HOME/os161/tools
+CC="gcc -std=gnu89"
+CC_FOR_BUILD="gcc -std=gnu89"
+./configure --target=mips-harvard-os161 --prefix=$HOME/os161/tools
 make
 make install
 cd ..
 
 
 # Download, build, and install the simulator sys161-2.0.8 
-wget http://www.eecs.harvard.edu/~dholland/os161/download/sys161-2.0.8.tar.gz
+wget -N http://www.eecs.harvard.edu/~dholland/os161/download/sys161-2.0.8.tar.gz
 tar -zxf sys161-2.0.8.tar.gz
 
 cd sys161-2.0.8
@@ -79,8 +80,8 @@ cd ..
 # Download, build, and install the simulator sys161-2.0.8 
 # Important note: mk.tar.gz needs to be unpacked inside bmake. (Don't blame me! I didn't set it up that way.)
 
-wget http://www.eecs.harvard.edu/~dholland/os161/download/bmake-20101215.tar.gz
-wget http://www.eecs.harvard.edu/~dholland/os161/download/mk-20100612.tar.gz
+wget -N http://www.eecs.harvard.edu/~dholland/os161/download/bmake-20101215.tar.gz
+wget -N http://www.eecs.harvard.edu/~dholland/os161/download/mk-20100612.tar.gz
 tar -zxf bmake-20101215.tar.gz
 cd bmake
 tar -zxf ../mk-20100612.tar.gz
