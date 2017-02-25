@@ -153,11 +153,16 @@ lock_create(const char *name)
                 kfree(lock);
                 return NULL;
         }
-
+	
 	HANGMAN_LOCKABLEINIT(&lock->lk_hangman, lock->lk_name);
 
-        // add stuff here as needed
-
+	lock->lk_free=1; //student|set lock to be free by default
+	lock->lk_wchan=wchan_create("lk_wchan");//student|
+	if (lock->lk_wchan == NULL) {
+		//cleanup and return NULL
+	}
+	spinlock_init(lock->lk_splk);//student|
+	
         return lock;
 }
 
@@ -166,8 +171,8 @@ lock_destroy(struct lock *lock)
 {
         KASSERT(lock != NULL);
 
-        // add stuff here as needed
-
+	    wchan_destroy(lock->lk_wchan);//student
+	    spinlock_cleanup(lock->lk_splk);//student
         kfree(lock->lk_name);
         kfree(lock);
 }
@@ -176,35 +181,52 @@ void
 lock_acquire(struct lock *lock)
 {
 	/* Call this before waiting for a lock */
-	//HANGMAN_WAIT(&curthread->t_hangman, &lock->lk_hangman);
+	HANGMAN_WAIT(&curthread->t_hangman, &lock->lk_hangman);
 
-        // Write this
-
-        (void)lock;  // suppress warning until code gets written
+	spinlock_acquire(lock->lk_splk);
+	if(lk_free!=1)
+	{
+		wchan_sleep(lock->lk_wchan,lock->lk_splk);
+	}
+	else
+	{
+		lk_free=0;
+		spinlock_release(lock->lk_splk);
+    }
+	
+		
+       
 
 	/* Call this once the lock is acquired */
-	//HANGMAN_ACQUIRE(&curthread->t_hangman, &lock->lk_hangman);
+	HANGMAN_ACQUIRE(&curthread->t_hangman, &lock->lk_hangman);
 }
 
 void
 lock_release(struct lock *lock)
 {
 	/* Call this when the lock is released */
-	//HANGMAN_RELEASE(&curthread->t_hangman, &lock->lk_hangman);
-
-        // Write this
-
-        (void)lock;  // suppress warning until code gets written
+	HANGMAN_RELEASE(&curthread->t_hangman, &lock->lk_hangman);
+		//note:was commented out
+		// Write this
+		spinlock_acquire(lock->lk_splk);
+		if(!wchan_isempty(lock->lk_wchan,lock->lk_splk))
+		{
+			wchan_wakeone(lock->lk_wchan,lock->lk_splk);
+			}
+		else
+		{
+			lock->lk_free=0;
+			}
+		
+        spinlock_release(lock->lk_splk);
+		
+     
 }
 
 bool
 lock_do_i_hold(struct lock *lock)
 {
-        // Write this
-
-        (void)lock;  // suppress warning until code gets written
-
-        return true; // dummy until code gets written
+        return spinlock_do_i_hold(lock->splk);
 }
 
 ////////////////////////////////////////////////////////////
