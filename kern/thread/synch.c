@@ -226,9 +226,13 @@ cv_create(const char *name)
         if (cv->cv_name==NULL) {
                 kfree(cv);
                 return NULL;
-        }
+	}
 
-        // add stuff here as needed
+        cv->cv_wchan = wchan_create(name)
+	if (cv->cv_whan==NULL) {
+		kfree(cv);
+		return NULL;
+	}
 
         return cv;
 }
@@ -238,7 +242,7 @@ cv_destroy(struct cv *cv)
 {
         KASSERT(cv != NULL);
 
-        // add stuff here as needed
+	wchan_destroy(cv->cv_wchan);
 
         kfree(cv->cv_name);
         kfree(cv);
@@ -247,23 +251,66 @@ cv_destroy(struct cv *cv)
 void
 cv_wait(struct cv *cv, struct lock *lock)
 {
-        // Write this
-        (void)cv;    // suppress warning until code gets written
-        (void)lock;  // suppress warning until code gets written
+	KASSERT(lock_do_i_hold(lock));
+
+	// we have the lock and the internal spinlock, no other thread may touch it
+	// thus we can modify internal lock variables, no other thread can get
+	// spinlock and no other thread can modify the outer lock
+
+	//lock_release_keep_spinlock(lock);
+	// Mark lock as released, wchan_sleep will release the spinlock for us
+	// (same order of operations in the real relase code)
+	lock->lk_free=1;
+
+	// puts current thread on wait channel and suspends
+	wchan_sleep(cv->cv_wchan, lock->lk_splk);
+
+	//lock_acquire_given_spinlock(lock);
+	// wchan will reacquire the spinlock for us, therefore no other thread can
+	// claim the lock
+	// thus we only need to mark the lock as busy then release the entire lock
+	lock->lk_free=0;
+	lock_release(lock);
+
+
+
+
+
+	// Shitty version, keeps semantics correct but wildly innefficient
+	/*
+	KASSERT(lock_do_i_hold(lock));
+
+	// release our lock, wchan needs the internal spinlock
+	// any non-atomicness should be taken care of by the while(wait)
+	// which should be used on every cv use
+	lock_release(lock);
+
+	// we need to acquire the lock's internal spinlock for wchan_sleep to work
+	spinlock_acquire(lock->lk_splk);
+	// puts current thread on wait channel and suspends
+	wchan_sleep(cv->cv_wchan, lock->lk_splk);
+
+	// we need to release the internal spinlock for lock_acquire to work
+	spinlock_release(lock->splk);
+
+	lock_acquire(lock);
+	*/
 }
 
 void
 cv_signal(struct cv *cv, struct lock *lock)
 {
-        // Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+	KASSERT(lock_do_i_hold(lock));
+	if (!wchan_isempty(cv->cv_wchan)) {
+		wchan_wakeone(cv->cv_wchan);
+	}
 }
 
 void
 cv_broadcast(struct cv *cv, struct lock *lock)
 {
-	// Write this
-	(void)cv;    // suppress warning until code gets written
-	(void)lock;  // suppress warning until code gets written
+	KASSERT(lock_do_i_hold(lock));
+	if (!wchan_isempty(cv->cv_wchan)) {
+		wchan_wakeall(cv->cv_wchan);
+	}
 }
