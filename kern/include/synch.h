@@ -77,6 +77,12 @@ struct lock {
         HANGMAN_LOCKABLE(lk_hangman);   /* Deadlock detector hook. */
         // add what you need here
         // (don't forget to mark things volatile as needed)
+        volatile bool lk_free;//student|used to determine whether threads can pass or not.
+        struct spinlock *lk_splk;//student|
+       //struct cpu* lk_cpu;//student|
+        struct wchan *lk_wchan;
+        
+        
 };
 
 struct lock *lock_create(const char *name);
