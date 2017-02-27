@@ -488,6 +488,7 @@ cmd_opsmenu(int n, char **a)
 }
 
 static const char *testmenu[] = {
+	"[a1a] ASST1 Batch Tests             ",
 	"[at]  Array test                    ",
 	"[at2] Large array test              ",
 	"[bt]  Bitmap test                   ",
@@ -597,6 +598,7 @@ static struct {
 	{ "buf",        cmd_bufstats },
 
 	/* base system tests */
+	{ "a1a",        asst1_tests },
 	{ "at",		arraytest },
 	{ "at2",	arraytest2 },
 	{ "bt",		bitmaptest },
