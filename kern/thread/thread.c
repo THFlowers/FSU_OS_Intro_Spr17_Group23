@@ -323,11 +323,10 @@ exorcise(void)
 {
 	struct thread *z;
 
+	int spl = splhigh();
 	while ((z = threadlist_remhead(&curcpu->c_zombies)) != NULL) {
 		KASSERT(z != curthread);
 		KASSERT(z->t_state == S_ZOMBIE);
-
-		int spl = splhigh();
 
 		struct lock* lock = z->t_join_lk;
 		struct cv* cv = z->t_cv;
@@ -342,8 +341,8 @@ exorcise(void)
 			lock_release(lock);
 		}
 
-		splx(spl);
 	}
+	splx(spl);
 }
 
 /*
