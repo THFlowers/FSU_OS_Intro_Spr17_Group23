@@ -39,6 +39,7 @@
 #include <array.h>
 #include <spinlock.h>
 #include <threadlist.h>
+#include <synch.h>
 
 struct cpu;
 
@@ -74,6 +75,10 @@ struct thread {
 	const char *t_wchan_name;	/* Name of wait channel, if sleeping */
 	threadstate_t t_state;		/* State this thread is in */
 
+	struct cv *t_cv;		/* CV for thread_join */
+	struct lock *t_join_lk;		/* lock for thread_join */
+	bool t_has_joined;	/* boolean for join, a thread won't delete until it is joined */
+
 	/*
 	 * Thread subsystem internal fields.
 	 */
@@ -108,8 +113,6 @@ struct thread {
 
 	/* VFS */
 	bool t_did_reserve_buffers;	/* reserve_buffers() in effect */
-
-	/* add more here as needed */
 };
 
 /*
@@ -147,6 +150,20 @@ void thread_shutdown(void);
 int thread_fork(const char *name, struct proc *proc,
                 void (*func)(void *, unsigned long),
                 void *data1, unsigned long data2);
+
+/* Copy of thread_fork intended for joining with later
+ * Since thread_joins must occur within a process the proc*
+ * arg can be replaced with a thread* arg
+ */
+int thread_fork_for_join(const char *name,
+	    struct thread **newthread,
+	    void (*entrypoint)(void *data1, unsigned long data2),
+	    void *data1, unsigned long data2);
+
+/*  Makes the current thread sleep on another threads wait channel
+ *  until the target thread exits
+ */
+int thread_join(struct thread* target);
 
 /*
  * Cause the current thread to exit.

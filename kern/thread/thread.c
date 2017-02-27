@@ -130,6 +130,24 @@ thread_create(const char *name)
 		kfree(thread);
 		return NULL;
 	}
+
+	thread->t_cv = cv_create(name);
+	if (thread->t_cv == NULL) {
+		kfree(thread->t_name);
+		kfree(thread);
+		return NULL;
+	}
+
+	thread->t_join_lk = lock_create(name);
+	if (thread->t_join_lk == NULL) {
+		cv_destroy(thread->t_cv);
+		kfree(thread->t_name);
+		kfree(thread);
+		return NULL;
+	}
+
+	thread->t_has_joined = false;
+
 	thread->t_wchan_name = "NEW";
 	thread->t_state = S_READY;
 
@@ -149,8 +167,6 @@ thread_create(const char *name)
 
 	/* VFS fields */
 	thread->t_did_reserve_buffers = false;
-
-	/* If you add to struct thread, be sure to initialize here */
 
 	return thread;
 }
@@ -289,6 +305,8 @@ thread_destroy(struct thread *thread)
 	/* sheer paranoia */
 	thread->t_wchan_name = "DESTROYED";
 
+	lock_destroy(thread->t_join_lk);
+	cv_destroy(thread->t_cv);
 	kfree(thread->t_name);
 	kfree(thread);
 }
@@ -308,7 +326,23 @@ exorcise(void)
 	while ((z = threadlist_remhead(&curcpu->c_zombies)) != NULL) {
 		KASSERT(z != curthread);
 		KASSERT(z->t_state == S_ZOMBIE);
-		thread_destroy(z);
+
+		int spl = splhigh();
+
+		struct lock* lock = z->t_join_lk;
+		struct cv* cv = z->t_cv;
+
+		lock_acquire(lock);
+		if (z->t_has_joined) {
+			lock_release(lock);
+			thread_destroy(z);
+		}
+		else {
+			cv_broadcast(cv, lock);
+			lock_release(lock);
+		}
+
+		splx(spl);
 	}
 }
 
@@ -550,6 +584,73 @@ thread_fork(const char *name,
 	/* Lock the current cpu's run queue and make the new thread runnable */
 	thread_make_runnable(newthread, false);
 
+	/* Set the has_joined filed to true so that exorcise will delete itr
+	 * when it exits and not wait for a thread to join first
+	 */
+	newthread->t_has_joined=1;
+
+	return 0;
+}
+
+/* Copy of thread_fork intended for joining with later
+ * Since thread_joins must occur within a process the proc*
+ * arg can be replaced with a thread* arg
+ */
+int
+thread_fork_for_join(const char *name,
+	    struct thread **thread,
+	    void (*entrypoint)(void *data1, unsigned long data2),
+	    void *data1, unsigned long data2)
+{
+	struct thread *newthread;
+	int result;
+
+	newthread = thread_create(name);
+	if (newthread == NULL) {
+		return ENOMEM;
+	}
+
+	/* Allocate a stack */
+	newthread->t_stack = kmalloc(STACK_SIZE);
+	if (newthread->t_stack == NULL) {
+		thread_destroy(newthread);
+		return ENOMEM;
+	}
+	thread_checkstack_init(newthread);
+
+	/* Thread subsystem fields */
+	newthread->t_cpu = curthread->t_cpu;
+
+	struct proc* proc = curthread->t_proc;
+	result = proc_addthread(proc, newthread);
+	if (result) {
+		/* thread_destroy will clean up the stack */
+		thread_destroy(newthread);
+		return result;
+	}
+
+	newthread->t_iplhigh_count++;
+	switchframe_init(newthread, entrypoint, data1, data2);
+	thread_make_runnable(newthread, false);
+
+	*thread = newthread;
+	return 0;
+}
+
+/*  Makes the current thread sleep on another threads wait channel
+ *  until the target thread exits
+ */
+int
+thread_join(struct thread* target) {
+	int spl = splhigh();
+	if (target != NULL)
+	{
+		lock_acquire(target->t_join_lk);
+		while (target != NULL && target->t_state != S_ZOMBIE)
+			cv_wait(target->t_cv, target->t_join_lk);
+		lock_release(target->t_join_lk);
+	}
+	splx(spl);
 	return 0;
 }
 
@@ -804,6 +905,7 @@ thread_exit(void)
 
 	/* Interrupts off on this processor */
         splhigh();
+
 	thread_switch(S_ZOMBIE, NULL, NULL);
 	panic("braaaaaaaiiiiiiiiiiinssssss\n");
 }

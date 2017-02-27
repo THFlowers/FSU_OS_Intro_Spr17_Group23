@@ -506,6 +506,8 @@ static const char *testmenu[] = {
 	"[sy2] Lock test             (1)     ",
 	"[sy3] CV test               (1)     ",
 	"[sy4] CV test #2            (1)     ",
+	"[sy5] thread_join test #1           ",
+	"[sy6] thread_join test #2           ",
 	"[semu1-22] Semaphore unit tests     ",
 	"[fs1] Filesystem test               ",
 	"[fs2] FS read stress                ",
@@ -615,6 +617,8 @@ static struct {
 	{ "sy2",	locktest },
 	{ "sy3",	cvtest },
 	{ "sy4",	cvtest2 },
+	{ "sy5",	jointest1},
+	{ "sy6",	jointest2},
 #if OPT_SYNCHPROBS
     { "sp1",    elves },
     { "sp2",    airballoon },

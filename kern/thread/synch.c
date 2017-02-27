@@ -39,6 +39,7 @@
 #include <thread.h>
 #include <current.h>
 #include <synch.h>
+#include <spl.h>
 
 ////////////////////////////////////////////////////////////
 //
@@ -77,10 +78,14 @@ void
 sem_destroy(struct semaphore *sem)
 {
         KASSERT(sem != NULL);
+	int spl = splhigh();
 
 	/* wchan_cleanup will assert if anyone's waiting on it */
 	spinlock_cleanup(&sem->sem_lock);
 	wchan_destroy(sem->sem_wchan);
+
+	splx(spl);
+
         kfree(sem->sem_name);
         kfree(sem);
 }
@@ -99,6 +104,7 @@ P(struct semaphore *sem)
         KASSERT(curthread->t_in_interrupt == false);
 
 	/* Use the semaphore spinlock to protect the wchan as well. */
+	int spl = splhigh();
 	spinlock_acquire(&sem->sem_lock);
         while (sem->sem_count == 0) {
 		/*
@@ -118,6 +124,7 @@ P(struct semaphore *sem)
         KASSERT(sem->sem_count > 0);
         sem->sem_count--;
 	spinlock_release(&sem->sem_lock);
+	splx(spl);
 }
 
 void
@@ -125,6 +132,7 @@ V(struct semaphore *sem)
 {
         KASSERT(sem != NULL);
 
+	int spl = splhigh();
 	spinlock_acquire(&sem->sem_lock);
 
         sem->sem_count++;
@@ -132,11 +140,12 @@ V(struct semaphore *sem)
 	wchan_wakeone(sem->sem_wchan, &sem->sem_lock);
 
 	spinlock_release(&sem->sem_lock);
+	splx(spl);
 }
 
 ////////////////////////////////////////////////////////////
 //
-// Lock.
+// Lock.        Implemented by Joseph Viyan
 
 struct lock *
 lock_create(const char *name)
@@ -176,8 +185,8 @@ lock_destroy(struct lock *lock)
 {
 	KASSERT(lock != NULL);
 
-	spinlock_cleanup(&lock->lk_splk);//student
-	wchan_destroy(lock->lk_wchan);//student
+	spinlock_cleanup(&lock->lk_splk);
+	wchan_destroy(lock->lk_wchan);
 
 	kfree(lock->lk_name);
 	kfree(lock);
@@ -188,16 +197,22 @@ lock_acquire(struct lock *lock)
 {
 	HANGMAN_WAIT(&curthread->t_hangman, &lock->lk_hangman);
 
+	KASSERT(lock != NULL);
+        //KASSERT(curthread->t_in_interrupt == false);
+
+	int spl = splhigh();
 	spinlock_acquire(&lock->lk_splk);
 
 	while (lock->lk_free==0)
 	{
 		wchan_sleep(lock->lk_wchan,&lock->lk_splk);
 	}
+
 	lock->lk_free=0;
 	lock->lk_thread=curthread;
 
 	spinlock_release(&lock->lk_splk);
+	splx(spl);
 
 	HANGMAN_ACQUIRE(&curthread->t_hangman, &lock->lk_hangman);
 }
@@ -210,6 +225,7 @@ lock_release(struct lock *lock)
 
 	HANGMAN_RELEASE(&curthread->t_hangman, &lock->lk_hangman);
 
+	int spl = splhigh();
 	spinlock_acquire(&lock->lk_splk);
 	if(!wchan_isempty(lock->lk_wchan,&lock->lk_splk))
 	{
@@ -219,6 +235,7 @@ lock_release(struct lock *lock)
 	lock->lk_thread=NULL;
 
 	spinlock_release(&lock->lk_splk);
+	splx(spl);
 }
 
 bool
@@ -233,7 +250,7 @@ lock_do_i_hold(struct lock *lock)
 
 ////////////////////////////////////////////////////////////
 //
-// CV
+// CV         Implemented by Thai Flowers
 
 
 struct cv *
@@ -292,31 +309,37 @@ cv_wait(struct cv *cv, struct lock *lock)
 	spinlock_release(&lock->lk_splk);
 	*/
 
+	int spl = splhigh();
 	lock_release(lock);
 	spinlock_acquire(&lock->lk_splk);
 	wchan_sleep(cv->cv_wchan, &lock->lk_splk);
 	spinlock_release(&lock->lk_splk);
 	lock_acquire(lock);
+	splx(spl);
 }
 
 void
 cv_signal(struct cv *cv, struct lock *lock)
 {
 	KASSERT(lock_do_i_hold(lock));
+	int spl = splhigh();
 	spinlock_acquire(&lock->lk_splk);
-	if (!wchan_isempty(cv->cv_wchan, &lock->lk_splk)) {
+	//if (!wchan_isempty(cv->cv_wchan, &lock->lk_splk)) {
 		wchan_wakeone(cv->cv_wchan, &lock->lk_splk);
-	}
+	//}
 	spinlock_release(&lock->lk_splk);
+	splx(spl);
 }
 
 void
 cv_broadcast(struct cv *cv, struct lock *lock)
 {
 	KASSERT(lock_do_i_hold(lock));
+	int spl = splhigh();
 	spinlock_acquire(&lock->lk_splk);
-	if (!wchan_isempty(cv->cv_wchan, &lock->lk_splk)) {
+	//if (!wchan_isempty(cv->cv_wchan, &lock->lk_splk)) {
 		wchan_wakeall(cv->cv_wchan, &lock->lk_splk);
-	}
+	//}
 	spinlock_release(&lock->lk_splk);
+	splx(spl);
 }
