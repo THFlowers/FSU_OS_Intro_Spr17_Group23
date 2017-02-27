@@ -80,9 +80,7 @@ struct lock {
         volatile bool lk_free;//student|used to determine whether threads can pass or not.
         struct spinlock lk_splk;//student|
         struct wchan *lk_wchan;
-	struct thread* lk_thread;
-        
-        
+	struct thread* volatile lk_thread;
 };
 
 struct lock *lock_create(const char *name);

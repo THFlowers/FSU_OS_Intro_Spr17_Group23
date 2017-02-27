@@ -205,6 +205,9 @@ lock_acquire(struct lock *lock)
 void
 lock_release(struct lock *lock)
 {
+	KASSERT(lock != NULL);
+	KASSERT(lock_do_i_hold(lock));
+
 	HANGMAN_RELEASE(&curthread->t_hangman, &lock->lk_hangman);
 
 	spinlock_acquire(&lock->lk_splk);
@@ -221,15 +224,11 @@ lock_release(struct lock *lock)
 bool
 lock_do_i_hold(struct lock *lock)
 {
-	if (lock->lk_free == 1)
+	KASSERT(lock!=NULL);
+	if (lock->lk_free)
 		return false;
-	else {
-		// don't trust builtin comparison and macro bool matching
-		if (lock->lk_thread == curthread)
-			return true;
-		else
-			return false;
-	}
+	else 
+		return (lock->lk_thread == curthread);
 }
 
 ////////////////////////////////////////////////////////////
@@ -278,6 +277,7 @@ cv_wait(struct cv *cv, struct lock *lock)
 {
 	KASSERT(lock_do_i_hold(lock));
 
+	/*
 	//lock_release_keep_spinlock(lock);
 	spinlock_acquire(&lock->lk_splk);
 	lock->lk_free=1;
@@ -288,7 +288,15 @@ cv_wait(struct cv *cv, struct lock *lock)
 	//lock_acquire_given_spinlock(lock);
 	lock->lk_free=0;
 	lock->lk_thread=curthread;
+
 	spinlock_release(&lock->lk_splk);
+	*/
+
+	lock_release(lock);
+	spinlock_acquire(&lock->lk_splk);
+	wchan_sleep(cv->cv_wchan, &lock->lk_splk);
+	spinlock_release(&lock->lk_splk);
+	lock_acquire(lock);
 }
 
 void
