@@ -3,6 +3,8 @@
  *  Thread fork and join test code.
  */
 
+// Implemented by Thai Flowers
+
 #include <types.h>
 #include <lib.h>
 #include <thread.h>
@@ -12,9 +14,9 @@
 int
 asst1_tests(int argc, char** argv)
 {
-	cv_u_test(argc, argv);
 	jointest1(argc, argv);
 	jointest2(argc, argv);
+	cv_u_test(argc, argv);
 	return 0;
 }
 #define NTHREADS 6
@@ -126,93 +128,117 @@ jointest2(int nargs, char** args)
 	return 0;
 }
 
-struct cvt_stock
+// Implemented by Joseph Viyan
+struct stock
 {
         int max;
         int front;
         int tail;
-        int buf[30];
+        int* buffer;
         struct cv * empty;
         struct cv * full;
-	struct lock * cvt_lock;
+	struct lock * s_lock;
 };
-struct cvt_stock * stock;
-static void cvtake(void*,unsigned long);
-static void cvadd(void*,unsigned long);
 
-static void cvtake(void * junk,unsigned long cvt_item)
+// Global variable for CV tests
+struct stock * test_stock;
+#define NUM_ITEMS 40
+
+int stock_remove(struct stock* stock);
+void stock_add(struct stock* stock, int item);
+
+int
+stock_remove(struct stock* stock)
 {
+	int item;
 
-	(void)junk;
-	cvt_item=0;
-	lock_acquire(stock->cvt_lock);
+	lock_acquire(stock->s_lock);
         while(stock->front==stock->tail)
-                cv_wait(stock->empty,stock->cvt_lock);
-        cvt_item=stock->buf[stock->front%stock->max];
+                cv_wait(stock->empty,stock->s_lock);
+        item=stock->buffer[stock->front % stock->max];
         stock->front++;
-        cv_signal(stock->full,stock->cvt_lock);
-        lock_release(stock->cvt_lock);
-	(void)cvt_item;
-}
-static void cvadd(void * junk,unsigned long item)
-{
-	(void)junk;
-	lock_acquire(stock->cvt_lock);
-        while((stock->tail-stock->front)==stock->max)
-                  cv_wait(stock->full,stock->cvt_lock);
-        stock->buf[stock->tail%stock->max]=item;
-        stock->tail++;
-        cv_signal(stock->empty,stock->cvt_lock);
-        lock_release(stock->cvt_lock);
+        cv_signal(stock->full,stock->s_lock);
+
+        lock_release(stock->s_lock);
+
+	return item;
 }
 
+void
+stock_add(struct stock* stock, int item)
+{
+	lock_acquire(stock->s_lock);
+        while((stock->tail-stock->front) == stock->max)
+                  cv_wait(stock->full,stock->s_lock);
+        stock->buffer[stock->tail%stock->max]=item;
+        stock->tail++;
+        cv_signal(stock->empty,stock->s_lock);
+        lock_release(stock->s_lock);
+}
+
+static
+void
+add_thread(void *junk, unsigned long num)
+{
+	(void)junk;
+
+	unsigned int i;
+	for (i=0; i<(num+1); i++) {
+		stock_add(test_stock, i);
+		kprintf("%d send\n", i);
+	}
+}
+
+static
+void
+rem_thread(void *junk, unsigned long num)
+{
+	(void)junk;
+
+	unsigned int out;
+	do {
+		out = stock_remove(test_stock);
+		kprintf("%d recieved!\n", out);
+	} while (out < num);
+}
 
 int cv_u_test(int nargs, char ** args)
 {
 	(void)nargs;
 	(void)args;
+
 	kprintf("\nStarting CV Unit tests...\n");
-	int i=0;
-	int k=0;
-	//char threadname[20];
-	unsigned long cvt_item;
-	unsigned long cvt_item1;
-	stock->max=30;
-	stock->front=0;
-	stock->tail=0;
-	stock->cvt_lock=lock_create("CVTlock");
-	stock->empty=cv_create("Empty");
-	stock->full=cv_create("Full");
 
+	test_stock = kmalloc(sizeof(struct stock));
+	test_stock->max=20;
+	test_stock->front=0;
+	test_stock->tail=0;
+	test_stock->buffer = kmalloc(test_stock->max*sizeof(int));
+	test_stock->s_lock=lock_create("CVTlock");
+	test_stock->empty=cv_create("Empty");
+	test_stock->full=cv_create("Full");
 
+	struct thread* consumer;
 
-
-	//strcpy(threadname, "thread   ");
-	cvt_item=i+1;
-	cvt_item1=i+2;
-	threadname[7]=i;
-	threadname[8]='T';
-	thread_fork(threadname, NULL, cvtake,NULL,cvt_item);
-	threadname[8]='A';
-	thread_fork(threadname,NULL,cvadd,NULL,cvt_item1);
-
-	k++;
-	if(stock->front>stock->tail)
-	{
-		kprintf("\nError CV breach\n");
-		return 0;
+	int result;
+	result = thread_fork("producer", NULL, add_thread, NULL, NUM_ITEMS);
+	if (result) {
+		panic("cv test: thread_fork failed %s)\n", strerror(result));
 	}
-	while(k< stock->max)
-	{
-		kprintf("\n");
-		for(i=stock->front;i< stock->tail;i++)
-			kprintf("%d ",stock->buf[i]);
+	result = thread_fork_for_join("consumer", &consumer, rem_thread, NULL, NUM_ITEMS);
+	if (result) {
+		panic("cv test: thread_fork failed %s)\n", strerror(result));
 	}
+
+	thread_join(consumer);
+
+	kfree(test_stock->buffer);
+	lock_destroy(test_stock->s_lock);
+	cv_destroy(test_stock->empty);
+	cv_destroy(test_stock->full);
 
 	kprintf("\nCV tests done\n");
 
-	return 1;
-
+	return 0;
 }
-
 

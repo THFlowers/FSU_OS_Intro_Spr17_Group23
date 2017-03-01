@@ -291,15 +291,6 @@ thread_destroy(struct thread *thread)
 	 * either here or in thread_exit(). (And not both...)
 	 */
 
-	/*
-	 * Detach from our process. You might need to move this action
-	 * around, depending on how your wait/exit works.
-	 */
-	proc_remthread(cur);
-
-	/* Make sure we *are* detached (move this only if you're sure!) */
-	KASSERT(cur->t_proc == NULL);
-
 	/* VFS fields, cleaned up in thread_exit */
 	KASSERT(thread->t_did_reserve_buffers == false);
 
@@ -703,14 +694,10 @@ thread_switch(threadstate_t newstate, struct wchan *wc, struct spinlock *lk)
 	spinlock_acquire(&curcpu->c_runqueue_lock);
 
 	/* Micro-optimization: if nothing to do, just return */
-	bool empty = threadlist_isempty(&curcpu->c_runqueue);
-	if (newstate == S_READY && empty) {
+	if (newstate == S_READY && threadlist_isempty(&curcpu->c_runqueue)) {
 		spinlock_release(&curcpu->c_runqueue_lock);
 		splx(spl);
 		return;
-	}
-	/* If going to sleep and runque is empty then spurious wakeup */
-	if (newstate == S_SLEEP && empty) {
 	}
 
 	/* Put the thread in the right place. */
@@ -904,6 +891,15 @@ thread_exit(void)
 	cur = curthread;
 
 	KASSERT(cur->t_did_reserve_buffers == false);
+
+	/*
+	 * Detach from our process. You might need to move this action
+	 * around, depending on how your wait/exit works.
+	 */
+	proc_remthread(cur);
+
+	/* Make sure we *are* detached (move this only if you're sure!) */
+	KASSERT(cur->t_proc == NULL);
 
 	/* Check the stack guard band. */
 	thread_checkstack(cur);
