@@ -291,6 +291,15 @@ thread_destroy(struct thread *thread)
 	 * either here or in thread_exit(). (And not both...)
 	 */
 
+	/*
+	 * Detach from our process. You might need to move this action
+	 * around, depending on how your wait/exit works.
+	 */
+	proc_remthread(cur);
+
+	/* Make sure we *are* detached (move this only if you're sure!) */
+	KASSERT(cur->t_proc == NULL);
+
 	/* VFS fields, cleaned up in thread_exit */
 	KASSERT(thread->t_did_reserve_buffers == false);
 
@@ -642,7 +651,7 @@ thread_fork_for_join(const char *name,
 int
 thread_join(struct thread* target) {
 	int spl = splhigh();
-	if (target != NULL)
+	if (target != NULL && target->t_state != S_ZOMBIE)
 	{
 		lock_acquire(target->t_join_lk);
 		while (target != NULL && target->t_state != S_ZOMBIE)
@@ -694,10 +703,14 @@ thread_switch(threadstate_t newstate, struct wchan *wc, struct spinlock *lk)
 	spinlock_acquire(&curcpu->c_runqueue_lock);
 
 	/* Micro-optimization: if nothing to do, just return */
-	if (newstate == S_READY && threadlist_isempty(&curcpu->c_runqueue)) {
+	bool empty = threadlist_isempty(&curcpu->c_runqueue);
+	if (newstate == S_READY && empty) {
 		spinlock_release(&curcpu->c_runqueue_lock);
 		splx(spl);
 		return;
+	}
+	/* If going to sleep and runque is empty then spurious wakeup */
+	if (newstate == S_SLEEP && empty) {
 	}
 
 	/* Put the thread in the right place. */
@@ -725,7 +738,9 @@ thread_switch(threadstate_t newstate, struct wchan *wc, struct spinlock *lk)
 		threadlist_addtail(&curcpu->c_zombies, cur);
 		break;
 	}
+	//lock_acquire(curthread->t_join_lk);
 	cur->t_state = newstate;
+	//lock_release(curthread->t_join_lk);
 
 	/*
 	 * Get the next thread. While there isn't one, call cpu_idle().
@@ -889,15 +904,6 @@ thread_exit(void)
 	cur = curthread;
 
 	KASSERT(cur->t_did_reserve_buffers == false);
-
-	/*
-	 * Detach from our process. You might need to move this action
-	 * around, depending on how your wait/exit works.
-	 */
-	proc_remthread(cur);
-
-	/* Make sure we *are* detached (move this only if you're sure!) */
-	KASSERT(cur->t_proc == NULL);
 
 	/* Check the stack guard band. */
 	thread_checkstack(cur);
@@ -1096,8 +1102,7 @@ wchan_destroy(struct wchan *wc)
 {
 	threadlist_cleanup(&wc->wc_threads);
 	kfree(wc);
-}
-
+} 
 /*
  * Yield the cpu to another process, and go to sleep, on the specified
  * wait channel WC, whose associated spinlock is LK. Calling wakeup on
