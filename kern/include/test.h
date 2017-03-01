@@ -60,6 +60,7 @@ int cvtest(int, char **);
 int cvtest2(int, char **);
 int jointest1(int, char**);
 int jointest2(int, char**);
+int cv_u_test(int,char**);
 int asst1_tests(int, char**);
 
 /* semaphore unit tests */
