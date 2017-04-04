@@ -131,8 +131,16 @@ thread_create(const char *name)
 		return NULL;
 	}
 
-	thread->t_cv = cv_create(name);
-	if (thread->t_cv == NULL) {
+	thread->t_join_cv = cv_create(name);
+	if (thread->t_join_cv == NULL) {
+		kfree(thread->t_name);
+		kfree(thread);
+		return NULL;
+	}
+
+	thread->t_exit_cv = cv_create(name);
+	if (thread->t_exit_cv == NULL) {
+		cv_destroy(thread->t_join_cv);
 		kfree(thread->t_name);
 		kfree(thread);
 		return NULL;
@@ -140,13 +148,15 @@ thread_create(const char *name)
 
 	thread->t_join_lk = lock_create(name);
 	if (thread->t_join_lk == NULL) {
-		cv_destroy(thread->t_cv);
+		cv_destroy(thread->t_exit_cv);
+		cv_destroy(thread->t_join_cv);
 		kfree(thread->t_name);
 		kfree(thread);
 		return NULL;
 	}
 
 	thread->t_has_joined = false;
+	thread->t_has_exited = false;
 
 	thread->t_wchan_name = "NEW";
 	thread->t_state = S_READY;
@@ -306,7 +316,8 @@ thread_destroy(struct thread *thread)
 	thread->t_wchan_name = "DESTROYED";
 
 	lock_destroy(thread->t_join_lk);
-	cv_destroy(thread->t_cv);
+	cv_destroy(thread->t_join_cv);
+	cv_destroy(thread->t_exit_cv);
 	kfree(thread->t_name);
 	kfree(thread);
 }
@@ -323,26 +334,12 @@ exorcise(void)
 {
 	struct thread *z;
 
-	int spl = splhigh();
 	while ((z = threadlist_remhead(&curcpu->c_zombies)) != NULL) {
 		KASSERT(z != curthread);
 		KASSERT(z->t_state == S_ZOMBIE);
 
-		struct lock* lock = z->t_join_lk;
-		struct cv* cv = z->t_cv;
-
-		lock_acquire(lock);
-		if (z->t_has_joined) {
-			lock_release(lock);
-			thread_destroy(z);
-		}
-		else {
-			cv_broadcast(cv, lock);
-			lock_release(lock);
-		}
-
+		thread_destroy(z);
 	}
-	splx(spl);
 }
 
 /*
@@ -586,7 +583,7 @@ thread_fork(const char *name,
 	/* Set the has_joined filed to true so that exorcise will delete itr
 	 * when it exits and not wait for a thread to join first
 	 */
-	newthread->t_has_joined=1;
+	newthread->t_has_joined=true;
 
 	return 0;
 }
@@ -642,11 +639,14 @@ thread_fork_for_join(const char *name,
 int
 thread_join(struct thread* target) {
 	int spl = splhigh();
-	if (target != NULL && target->t_state != S_ZOMBIE)
+	if (target != NULL)
 	{
 		lock_acquire(target->t_join_lk);
-		while (target != NULL && target->t_state != S_ZOMBIE)
-			cv_wait(target->t_cv, target->t_join_lk);
+		while (!target->t_has_exited)
+		{
+			cv_wait(target->t_join_cv, target->t_join_lk);
+		}
+		target->t_has_joined = true;
 		lock_release(target->t_join_lk);
 	}
 	splx(spl);
@@ -891,6 +891,15 @@ thread_exit(void)
 	cur = curthread;
 
 	KASSERT(cur->t_did_reserve_buffers == false);
+
+	lock_acquire(cur->t_join_lk);
+	cur->t_has_exited = true;
+	while (!cur->t_has_joined)
+	{
+		cv_broadcast(cur->t_join_cv, cur->t_join_lk);
+		cv_wait(cur->t_exit_cv, cur->t_join_lk);
+	}
+	lock_release(cur->t_join_lk);
 
 	/*
 	 * Detach from our process. You might need to move this action

@@ -75,9 +75,11 @@ struct thread {
 	const char *t_wchan_name;	/* Name of wait channel, if sleeping */
 	threadstate_t t_state;		/* State this thread is in */
 
-	struct cv *t_cv;		/* CV for thread_join */
-	struct lock *t_join_lk;		/* lock for thread_join */
-	bool t_has_joined;	/* boolean for join, a thread won't delete until it is joined */
+	struct lock *t_join_lk;		/* lock for thread_join CVs */
+	struct cv *t_join_cv;		/* CV for thread_join waiting for exit */
+	struct cv *t_exit_cv;           /* CV for thread_exit waiting for a join */
+	bool t_has_joined;	/* boolean for join, a thread won't delete until it joins with another */
+	bool t_has_exited;      /* boolean for join, a thread won't join until the one it's waiting on has exited */
 
 	/*
 	 * Thread subsystem internal fields.
