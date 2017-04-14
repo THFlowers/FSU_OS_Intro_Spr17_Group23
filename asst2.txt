@@ -1,0 +1,33 @@
+
+Code Reading
+
+1) What is the numerical value of the exception code (EX_SYS) for a MIPS system call?
+
+The numerical value of symbol EX_SYS is 8, as can be verified in file os161/src/kern/arch/mips/include/trapframe.h on line 89.
+
+I found this by first visiting kern/include/syscall.h, then kern/arch/mips/locore/trap.c where I found symbols of the form EX_ABC.  I checked out the include statements and determined trapframe.h was promising.  After performing a local file search (locate command) I found trapframe.h (in the kern/arch/mips/include directory) and the EX symbol definitions.
+
+
+2) What is the difference between UIO_USERISPaCE and UIO_USERSPACE?  When should one use UIO_SYSSPACE instead?
+
+The answer to this is spelled out plainly in os161/src/kern/include/uio.h on line 67, in particular in the definition of the uio_seg enum.  All three indicate to the uio abstraction where data is moving to or from.  UIO_USERISPACE is space allocated for user process code.  UIO_USERSPACE is space allocated for user process data, and UIO_SYSSPACE is for space reserved for the kernel itself.
+
+
+3) Inside the function mips_trap(), the trapframe is show to contain four arguments for the next statement that invokes a system call.  What is required to implement a system call that takes more than 4 arguments?
+
+The comments at the beginning of kern/arch/mips/syscall/syscall.c spell this out very clearly.  You can pass 4 32-bit arguments or 2 64-bit arguments via the a0-a3 registers, after that "further arguments must be fetched from the user-level stack, starting at sp+16 to skip over the slots for the registerized values, with copyin()"
+
+
+4) In what file are copyin and copyout defined? memmove?  Why can't copyin and copyout be implemented as simply as memmove?  Hint: These functions are called in the kernel when one targeted data area is located within the address space of  user process, which may be swapped out.
+
+copyin and copyout are machine-dependent, although a common version usable on multiple machine types is provided in kern/vm/copyinout.c.
+
+memmove is implemented in common/libc/string/memmove.c
+
+memmove is designed to work in both libc (invoked by user programs) and in the kernel. In both contexts it copies data from one buffer to another within the same address space (and therefore in the same context).
+
+copyin and copyout are for copying data between user and kernel contexts, as such it has to protect against accidental or malicious invalid userspace memory addresses.  These are in turn virtual addresses which have to be translated into physical memory addresses, whereas memmove occurs in the same memory space context, requires no translation, and can depend on lower level abstractions to handle any paging or segmentation complications for it.
+
+
+5) What is the purpose of the SYSCALL macro?
+
