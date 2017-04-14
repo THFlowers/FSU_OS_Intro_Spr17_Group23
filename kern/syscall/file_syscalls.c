@@ -38,13 +38,36 @@ sys_open(const_userptr_t upath, int flags, mode_t mode, int *retval)
 	 *
 	 * Check the design document design/filesyscall.txt for the steps
 	 */
-	(void) upath; // suppress compilation warning until code gets written
-	(void) flags; // suppress compilation warning until code gets written
 	(void) mode; // suppress compilation warning until code gets written
 	(void) retval; // suppress compilation warning until code gets written
-	(void) allflags; // suppress compilation warning until code gets written
-	(void) kpath; // suppress compilation warning until code gets written
 	(void) file; // suppress compilation warning until code gets written
+
+	/*
+	 * flags must include one of the following access modes:
+	 * O_RDONLY, O_WRONLY, or O_RDWR.  These request opening the file
+	 *  read-only,  write-only, or read/write, respectively.
+	 */
+	int openflag = flags & (O_RDONLY | O_WRONLY | O_RDWR);
+	if (!( 	(openflag == O_RDONLY) ||
+		(openflag == O_WRONLY) ||
+		(openflag == O_WRONLY) 		))
+	{
+		errno = EINVAL;
+		return -1;
+	}
+
+	int len = strlen(upath)+1;
+	kpath = (char*)kmalloc(len);
+	if (kapth == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	
+	result = copyin(upath,kpath,len);
+	if (result) {
+		kfree(kpath);
+		return result;
+	}
 
 	return result;
 }

@@ -111,13 +111,13 @@ syscall(struct trapframe *tf)
 				 (userptr_t)tf->tf_a1);
 		break;
 
-	    /* Add stuff here */
             case SYS__exit:
   	       sys__exit(tf->tf_a0);
  	       panic("Returning from exit\n");
                break;
 
             /* Sample cases: open and read */
+	    // if implementing mode pass it in as userptr in a2
             case SYS_open:
                 err = sys_open(
                         (userptr_t)tf->tf_a0,
@@ -136,6 +136,21 @@ syscall(struct trapframe *tf)
 
             /* Project 2:
              * Add more for encrypt, close, and write . */
+	     case SYS_write:
+                err = sys_write(
+                        tf->tf_a0,
+                        (userptr_t)tf->tf_a1,
+                        tf->tf_a2,
+                        &retval);
+                break;
+
+            case SYS_close:
+                err = sys_close(
+                        (userptr_t)tf->tf_a0,
+                        tf->tf_a1,
+                        tf->tf_a2,
+                        &retval);
+                break;
 
 	    default:
 		kprintf("Unknown syscall %d\n", callno);
