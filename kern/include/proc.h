@@ -69,6 +69,7 @@ struct proc {
 
 	/* VFS */
 	struct vnode *p_cwd;		/* current working directory */
+	struct filetable *p_filetable;  /* table of open files */
 
 	/* add more material here as needed */
 };
@@ -84,6 +85,9 @@ struct proc *proc_create_runprogram(const char *name);
 
 /* Destroy a process. */
 void proc_destroy(struct proc *proc);
+
+/* terminate a process */
+void proc__exit(int status);
 
 /* Attach a thread to a process. Must not already have a process. */
 int proc_addthread(struct proc *proc, struct thread *t);

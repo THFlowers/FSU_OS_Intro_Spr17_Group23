@@ -32,6 +32,7 @@
  */
 
 #include <types.h>
+#include <kern/wait.h>
 #include <kern/errno.h>
 #include <kern/reboot.h>
 #include <kern/unistd.h>
@@ -204,6 +205,21 @@ sys_reboot(int code)
 	panic("reboot operation failed\n");
 	return 0;
 }
+
+/*
+ * sys__exit()
+ *
+ * The process-level work (exit status, waking up waiters, etc.)
+ * happens in proc__exit(). Then call thread_exit() to make our thread
+ * go away too.
+ */
+void
+sys__exit(int status)
+{
+       proc__exit(_MKWAIT_EXIT(status));
+       thread_exit();
+}
+
 
 /*
  * Kernel main. Boot up, then fork the menu thread; wait for a reboot
