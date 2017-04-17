@@ -117,7 +117,7 @@ syscall(struct trapframe *tf)
                break;
 
             /* Sample cases: open and read */
-	    // if implementing mode pass it in as userptr in a2
+	    // if implementing mode pass it in a2
             case SYS_open:
                 err = sys_open(
                         (userptr_t)tf->tf_a0,
@@ -147,7 +147,7 @@ syscall(struct trapframe *tf)
             case SYS_close:
                 err = sys_close(
                         tf->tf_a0,
-			&retval);
+                        &retval);
                 break;
 
 	    default:

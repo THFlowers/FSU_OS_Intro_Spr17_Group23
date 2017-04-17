@@ -65,6 +65,4 @@ int sys_read(int fd, userptr_t buf, size_t size, int *retval);
 int sys_write(int fd, userptr_t buf, size_t size, int *retval);
 int sys_close(int fd, int *retval);
 
-/* You need to add more for sys_encrypt, sys_write, and sys_close */
-
 #endif /* _SYSCALL_H_ */
