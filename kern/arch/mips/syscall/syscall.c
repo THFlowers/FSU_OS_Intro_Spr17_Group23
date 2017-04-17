@@ -150,7 +150,9 @@ syscall(struct trapframe *tf)
                         &retval);
                 break;
             case SYS_encrypt:
-                err = sys_encrypt(tf->tf_a0);
+                err = sys_encrypt(
+			tf->tf_a0,
+			&retval);
                 break;
 
 	    default:

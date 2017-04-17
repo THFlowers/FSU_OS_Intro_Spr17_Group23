@@ -20,6 +20,8 @@
 #include <filetable.h>
 #include <syscall.h>
 
+int cyc32r(int x, int n);
+
 /*
  * open() - get the path with copyinstr, then use openfile_open and
  * filetable_place to do the real work.
@@ -48,7 +50,7 @@ sys_open(const_userptr_t upath, int flags, mode_t mode, int *retval)
 	int openflag = flags & (O_RDONLY | O_WRONLY | O_RDWR);
 	if (!( 	(openflag == O_RDONLY) ||
 		(openflag == O_WRONLY) ||
-		(openflag == O_WRONLY) ))
+		(openflag == O_RDWR) ))
 	{
 		kprintf("sys_open given conflicting access mode flags\n");
 		return EINVAL;
@@ -247,15 +249,17 @@ sys_close(int fd, int *retval)
 int
 cyc32r(int x, int n)
 {
-	assert (n<32);
+	KASSERT(n<32);
 	if (!n) return x;
 	return (x>>n) | (x<<(32-n));
 }
 
 int
-sys_encrypt(int fd)
+sys_encrypt(int fd, int *retval)
 {
 	int result = 0;
+
+	(void)retval;
 
 	struct openfile *file;
 	struct filetable *ft = curproc->p_filetable;
@@ -286,8 +290,18 @@ sys_encrypt(int fd)
 	// shamelessly lifted from kern/test/fstest.c
 	rv = file->of_vnode;
 	rpos = 0;
+
+	// Do we need to lock it?
+	//lock_acquire(file->of_offsetlock);
+	kprintf("Got to loop\n");
 	while(!done) {
+		// clear out buf, endianness shouldn't matter
+		// make each byte equal to ' '
+		buf = ' ' | (' ' << 8) | (' ' << 16) | (' ' << 24);
+		kprintf("Set buf to ' 's\n");
+
 		uio_kinit(&iov, &ku, &buf, 4, rpos, UIO_READ);
+		kprintf("After first kinit\n");
 		result = VOP_READ(rv, &ku);
 		if (result) {
 			kprintf("VOP_READ error\n");
@@ -296,23 +310,23 @@ sys_encrypt(int fd)
 		rpos = ku.uio_offset;
 
 		if (ku.uio_resid > 0) {
+			kprintf("We should be done now\n");
 			done = true;
 		}
 
 		buf = cyc32r(buf, 10);
 
-		uio_kinit(&iov, &ku, &buf, 4-ku.uio_resid, wpos, UIO_WRITE);
+		// don't use uio_resid to align write, only allow 4 byte writes
+		uio_kinit(&iov, &ku, &buf, 4, wpos, UIO_WRITE);
+		kprintf("After second kinit\n");
 		result = VOP_WRITE(rv, &ku);
 		if (result) {
 			kprintf("VOP_WRITE error\n");
 			return EIO;
 		}
 		wpos = ku.uio_offset;
-
-		if (ku.uio_resid > 0) {
-			kprintf("Warning: short write\n");
-		}
 	}
+	//lock_release(file->of_offsetlock);
 
 	filetable_put(ft, fd, file);
 
