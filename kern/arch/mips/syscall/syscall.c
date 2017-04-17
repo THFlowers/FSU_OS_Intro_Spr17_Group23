@@ -149,6 +149,9 @@ syscall(struct trapframe *tf)
                         tf->tf_a0,
                         &retval);
                 break;
+            case SYS_encrypt:
+                err = sys_encrypt(tf->tf_a0);
+                break;
 
 	    default:
 		kprintf("Unknown syscall %d\n", callno);

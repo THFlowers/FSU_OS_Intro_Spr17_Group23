@@ -197,6 +197,9 @@
 #define SYS_reboot       119
 //#define SYS___sysctl   120
 
+//                              (ASST2) 
+#define SYS_encrypt      180
+
 /*CALLEND*/
 
 

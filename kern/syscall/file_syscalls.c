@@ -243,3 +243,78 @@ sys_close(int fd, int *retval)
 /* 
 * encrypt() - read and encrypt the data of a file
 */
+
+int
+cyc32r(int x, int n)
+{
+	assert (n<32);
+	if (!n) return x;
+	return (x>>n) | (x<<(32-n));
+}
+
+int
+sys_encrypt(int fd)
+{
+	int result = 0;
+
+	struct openfile *file;
+	struct filetable *ft = curproc->p_filetable;
+
+	// uio variables
+	struct vnode *rv;
+	struct iovec iov;
+	struct uio ku;
+	off_t  rpos, wpos;
+
+	int buf;
+	bool done=false;
+
+	if (!filetable_okfd(ft,fd)) {
+		kprintf("Bad filedescriptor %d \n", fd);
+		return EBADF;
+	}
+
+	result = filetable_get(ft, fd, &file);
+	if (result)
+		return result;
+	
+	if (!(file->of_accmode & O_RDWR)) {
+		kprintf("Bad filedescriptor %d \n", fd);
+		return EBADF;
+	}
+	
+	// shamelessly lifted from kern/test/fstest.c
+	rv = file->of_vnode;
+	rpos = 0;
+	while(!done) {
+		uio_kinit(&iov, &ku, &buf, 4, rpos, UIO_READ);
+		result = VOP_READ(rv, &ku);
+		if (result) {
+			kprintf("VOP_READ error\n");
+			return EIO;
+		}
+		rpos = ku.uio_offset;
+
+		if (ku.uio_resid > 0) {
+			done = true;
+		}
+
+		buf = cyc32r(buf, 10);
+
+		uio_kinit(&iov, &ku, &buf, 4-ku.uio_resid, wpos, UIO_WRITE);
+		result = VOP_WRITE(rv, &ku);
+		if (result) {
+			kprintf("VOP_WRITE error\n");
+			return EIO;
+		}
+		wpos = ku.uio_offset;
+
+		if (ku.uio_resid > 0) {
+			kprintf("Warning: short write\n");
+		}
+	}
+
+	filetable_put(ft, fd, file);
+
+	return result;
+}
