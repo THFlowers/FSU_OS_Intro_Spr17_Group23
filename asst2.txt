@@ -30,4 +30,19 @@ copyin and copyout are for copying data between user and kernel contexts, as suc
 
 
 5) What is the purpose of the SYSCALL macro?
+The purpose of the syscall macros is to provide a unique name for the number based on the syscall that number represents.
 
+6)To add a new system call SYS_encrypt , what numerical value is possible? Where would you define it?
+
+SYS_encript would probably have the # 27 by which we reassigned the macros that follow in kern/syscall.h. then we define its prototype in syscall.h(include root). 
+
+After we create its c file in the  kern/syscalls directory we insert its function into the switch within sycall.c
+
+7)What is the MIPS instruction that actually triggers a system call in the user space? (Answer this by reading the source in this directory userland/lib.)
+
+SYSCALL(sym, num) in syscalls-mips.S
+
+8)After reading syscalls-mips.S and syscall.c, you should be prepared to answer the following question: OS/161 supports 64-bit values. In void syscall(struct trapframe *tf) 
+where will you find each of the three arguments (in which registers) and how will you return the 64-bit offset?
+
+the three arguments are tf_a0/tf_a1,tf_a2/a3,and tf_v0/tf_v1. A 64bit offset would be returned through tf_v0/tf_v1.
