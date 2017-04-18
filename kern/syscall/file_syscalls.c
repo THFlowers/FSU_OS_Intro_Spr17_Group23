@@ -249,7 +249,7 @@ sys_close(int fd, int *retval)
 int
 cyc32r(int x, int n)
 {
-	KASSERT(n<32);
+	n = n % 32;
 	if (!n) return x;
 	return (x>>n) | (x<<(32-n));
 }
@@ -270,7 +270,7 @@ sys_encrypt(int fd, int *retval)
 	struct uio ku;
 	off_t  rpos, wpos;
 
-	int buf;
+	//int buf;
 	bool done=false;
 
 	if (!filetable_okfd(ft,fd)) {
@@ -290,18 +290,14 @@ sys_encrypt(int fd, int *retval)
 	// shamelessly lifted from kern/test/fstest.c
 	rv = file->of_vnode;
 	rpos = 0;
+	wpos = 0;
 
 	// Do we need to lock it?
 	//lock_acquire(file->of_offsetlock);
-	kprintf("Got to loop\n");
 	while(!done) {
-		// clear out buf, endianness shouldn't matter
-		// make each byte equal to ' '
-		buf = ' ' | (' ' << 8) | (' ' << 16) | (' ' << 24);
-		kprintf("Set buf to ' 's\n");
+		char buf[4];
 
-		uio_kinit(&iov, &ku, &buf, 4, rpos, UIO_READ);
-		kprintf("After first kinit\n");
+		uio_kinit(&iov, &ku, &buf, sizeof(int), rpos, UIO_READ);
 		result = VOP_READ(rv, &ku);
 		if (result) {
 			kprintf("VOP_READ error\n");
@@ -310,15 +306,19 @@ sys_encrypt(int fd, int *retval)
 		rpos = ku.uio_offset;
 
 		if (ku.uio_resid > 0) {
-			kprintf("We should be done now\n");
+			/*  Seems to be ignored for some reason, so removed padding with ' ' in user-space version
+			for (unsigned int i=0; i<ku.uio_resid; i++)
+				buf[3-i] = ' ';
+			*/
 			done = true;
 		}
 
-		buf = cyc32r(buf, 10);
+		int bufnum = cyc32r((int)buf[3], 10);
+		for (int j=0; j<4; j++)
+			buf[j] = (char)((bufnum >> 8*j) & 0xff);
 
 		// don't use uio_resid to align write, only allow 4 byte writes
-		uio_kinit(&iov, &ku, &buf, 4, wpos, UIO_WRITE);
-		kprintf("After second kinit\n");
+		uio_kinit(&iov, &ku, &buf, sizeof(int), wpos, UIO_WRITE);
 		result = VOP_WRITE(rv, &ku);
 		if (result) {
 			kprintf("VOP_WRITE error\n");

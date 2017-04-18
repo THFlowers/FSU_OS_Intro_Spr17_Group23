@@ -17,15 +17,13 @@ cyc32r(int x, int n)
 	return (x>>n) | (x<<(32-n));
 }
 
-#define BUFFSIZE 40
-#define RDBUFFSIZE 41
-#define WRBUFFSIZE 45
+#define BUFFSIZE 50
 
 int
 main(int argc, char *argv[])
 {
-	static char writebuf[WRBUFFSIZE] = "Twiddle dee dee, Twiddle dum dum.......\n";
-	static char readbuf[RDBUFFSIZE];
+	static char writebuf[BUFFSIZE] = " Twiddle dee dee, Twiddle dum dum.......1 2 3 4 ";
+	static char readbuf[BUFFSIZE]  = "                                                ";
 
 	const char *file;
 	int fd, rv;
@@ -41,18 +39,15 @@ main(int argc, char *argv[])
 		errx(1, "Usage: filetest <filename>");
 	}
 
-	printf("Got to write\n");
-
 	// Write data and encrypt
 	fd = open(file, O_RDWR|O_CREAT|O_TRUNC, 0664);
 	if (fd<0) {
 		err(1, "%s: open for write", file);
 	}
-	rv = write(fd, writebuf, 40);
+	rv = write(fd, writebuf, BUFFSIZE);
 	if (rv<0) {
 		err(1, "%s: write", file);
 	}
-	printf("Got to encrypt\n");
 	rv = encrypt(fd);
 	printf("Finished encrypt\n");
 	if (rv<0) {
@@ -63,54 +58,42 @@ main(int argc, char *argv[])
 		err(1, "%s: close (1st time)", file);
 	}
 
-	printf("Got to read\n");
-
 	// read in data
 	fd = open(file, O_RDONLY);
 	if (fd<0) {
 		err(1, "%s: open for read", file);
 	}
-	rv = read(fd, readbuf, 40);
+	rv = read(fd, readbuf, BUFFSIZE);
 	if (rv<0) {
 		err(1, "%s: read", file);
 	}
-	readbuf[BUFFSIZE] = '\0';
 	rv = close(fd);
 	if (rv<0) {
 		err(1, "%s: close (2nd time)", file);
 	}
 
-	printf("Got to user encrypt\n");
-
-	// encrypt original data in userland (with 4 byte rule)
-	int i=0;
-	for (; i<BUFFSIZE; i+=4) {
-		int temp = 0;
-		if (i+4 < BUFFSIZE) {
-			temp = (int)writebuf[i];
-		}
-		else {
-			for (int j=0; j<BUFFSIZE%4; j++) {
-				temp |= (writebuf[i+j] << 8*(4-j));
-			}
-			for (int j=BUFFSIZE%4; j<4; j++) {
-				temp |= (' ' << 8*(4-j));
-			}
-		}
-		temp = cyc32r(temp, 10);
-		writebuf[i] = temp;
+	// encrypt original data in userland (with 4 byte rule) [ but not padding with spaces ]
+	int wrlen = strlen(writebuf);
+	int maxwr = wrlen + wrlen % 4; // maxwr is the nearest multiple of 4 past wrlen
+	for (int i=0; i<maxwr; i+=4) {
+		char buf[4];
+		for (int j=0; j<4; j++)
+			//if (i+j < wrlen) // for some reason kernel-space version doesn't pad with ' ' but still works without crashing
+				buf[j] = writebuf[i+j];
+		int bufnum = cyc32r((int)buf[3], 10);
+		for (int j=0; j<4; j++)
+			writebuf[i+j] = (char)((bufnum >> 8*j) & 0xff);
 	}
-	writebuf[i+1] = '\0';
-
-	printf("Got to comparison\n");
 
 	// compare results, should be identical
-	if (strcmp(readbuf, writebuf)) {
-		errx(1, "Buffer data mismatch!");
+	printf("\n File:"); for (unsigned int i=0; i<BUFFSIZE; i++) printf("%d ", readbuf[i]);
+	printf("\n Buff:"); for (unsigned int i=0; i<BUFFSIZE; i++) printf("%d ", writebuf[i]);
+	if (memcmp(readbuf, writebuf, BUFFSIZE)) {
+		printf("\nBuffer data mismatch!\n");
+		return 1;
 	}
 	else {
-		printf("Success!\n");
+		printf("\nSuccess!\n");
+		return 0;
 	}
-
-	return 0;
 }
