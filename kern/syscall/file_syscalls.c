@@ -56,6 +56,7 @@ sys_open(const_userptr_t upath, int flags, mode_t mode, int *retval)
 		return EINVAL;
 	}
 
+	// O_EXCL only makes sense if O_CREAT is also used
 	if ((flags & O_EXCL) && !(flags & O_CREAT)) {
 		kprintf("sys_open given conflicting access mode flags\n");
 		return EINVAL;
@@ -70,7 +71,6 @@ sys_open(const_userptr_t upath, int flags, mode_t mode, int *retval)
 	
 	size_t actual;
 	result = copyinstr(upath,kpath,len,&actual);
-	//kprintf("%s\n", kpath);
 	if (result || actual<len) {
 		kfree(kpath);
 		return result;
@@ -78,10 +78,12 @@ sys_open(const_userptr_t upath, int flags, mode_t mode, int *retval)
 
 	result = openfile_open(kpath, flags, mode, &file);
 	if (result) {
-		/*
+		/* openfile_open consumes/frees kpath if successful
+		 * not sure if it does so as well when it doesn't succeed
+		 * seems to work, but may have edge cases beyond scope of project
 		if (kpath!=null)
 			kfree(kpath);
-		*/
+		 */
 		return result;
 	}
 
@@ -243,9 +245,11 @@ sys_close(int fd, int *retval)
 }
 
 /* 
-* encrypt() - read and encrypt the data of a file
-*/
+ * encrypt() - read and encrypt data a file, given a file descriptor
+ * (does not respect offset of any other file descriptor accessing this file)
+ */
 
+// cyclic 32-bit right shift by n bits, helper function for encrypt
 int
 cyc32r(int x, int n)
 {
@@ -293,7 +297,7 @@ sys_encrypt(int fd, int *retval)
 	wpos = 0;
 
 	// Do we need to lock it?
-	//lock_acquire(file->of_offsetlock);
+	lock_acquire(file->of_offsetlock);
 	while(!done) {
 		char buf[4];
 
@@ -306,7 +310,8 @@ sys_encrypt(int fd, int *retval)
 		rpos = ku.uio_offset;
 
 		if (ku.uio_resid > 0) {
-			/*  Seems to be ignored for some reason, so removed padding with ' ' in user-space version
+			/*  Seems to be ignored for some reason, so removed padding
+			 * with ' ' in user-space version
 			for (unsigned int i=0; i<ku.uio_resid; i++)
 				buf[3-i] = ' ';
 			*/
@@ -326,7 +331,7 @@ sys_encrypt(int fd, int *retval)
 		}
 		wpos = ku.uio_offset;
 	}
-	//lock_release(file->of_offsetlock);
+	lock_release(file->of_offsetlock);
 
 	filetable_put(ft, fd, file);
 
