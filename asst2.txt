@@ -34,15 +34,19 @@ The purpose of the syscall macros is to provide a unique name for the number bas
 
 6)To add a new system call SYS_encrypt , what numerical value is possible? Where would you define it?
 
-SYS_encript would probably have the # 27 by which we reassigned the macros that follow in kern/syscall.h. then we define its prototype in syscall.h(include root). 
-
-After we create its c file in the  kern/syscalls directory we insert its function into the switch within sycall.c
+SYS_encript would probably have the # 27 by which we reassigned the macros that follow in kern/syscall.h(or to avoid that, any number above 120). then we define its prototype in syscall.h(kern/include/kern) where
+it will be prototyped as a stub. Afterwards, we create its implimentation in its own file in the in the kern/syscalls directory. Finally we insert its function into the switch statement within syscall.c.
 
 7)What is the MIPS instruction that actually triggers a system call in the user space? (Answer this by reading the source in this directory userland/lib.)
 
-SYSCALL(sym, num) in syscalls-mips.S
+It is in userland/lib/libc/arch/mips/syscalls-mips.S
+on line 84 in the __SYSCALL function
+ syscall
 
 8)After reading syscalls-mips.S and syscall.c, you should be prepared to answer the following question: OS/161 supports 64-bit values. In void syscall(struct trapframe *tf) 
 where will you find each of the three arguments (in which registers) and how will you return the 64-bit offset?
 
-the three arguments are tf_a0/tf_a1,tf_a2/a3,and tf_v0/tf_v1. A 64bit offset would be returned through tf_v0/tf_v1.
+the three arguments would be in registers  a0/a1,a2/a3,and v0/v1.
+a0-a3 contain the values past in to the function. 
+a3 is also used to store 0 for success or an error number for failer.
+v0 is used to store 32 bit return values, but if a 64 bit value is returned, then that value would be returned across registers v0 and v1.
