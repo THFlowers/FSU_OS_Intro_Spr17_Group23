@@ -3,7 +3,7 @@
 TOP=../../..
 .include "$(TOP)/mk/os161.config.mk"
 
-PROG=encrypt
+PROG=encrypttest
 SRCS=encrypttest.c
 BINDIR=/testbin
 

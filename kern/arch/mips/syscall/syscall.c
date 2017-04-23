@@ -122,7 +122,7 @@ syscall(struct trapframe *tf)
                 err = sys_open(
                         (userptr_t)tf->tf_a0,
                         tf->tf_a1,
-                        tf->tf_a2,
+                        (mode_t)tf->tf_a2,
                         &retval);
                 break;
 
